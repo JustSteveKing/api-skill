@@ -50,6 +50,10 @@ This skill is prescriptive across 18 topics. When Claude generates or reviews La
 | 16 | **Versioning & Sunset** | `Sunset` middleware (RFC 8594) signals deprecation dates. v1 and v2 coexist in the same route file. |
 | 17 | **Forced JSON responses** | `ForceJsonResponse` middleware sets `Accept: application/json` on all requests, ensuring the exception handler always returns JSON. |
 | 18 | **CORS** | `HandleCors` is global. `config/cors.php` configured for standalone APIs. `allowed_origins` driven by env var. |
+| 19 | **Code quality standards** | `declare(strict_types=1)` everywhere. `final` on all classes. `match` over ternary chains. Named arguments. Full type coverage. PSR-12. |
+| 20 | **Model identifiers — ULIDs** | Never auto-increment IDs. Always `HasUlids` trait. `ulid` migration column. |
+| 21 | **Model strictness** | `Model::shouldBeStrict()` in `AppServiceProvider::boot()`. Prevents lazy loading, silently discarded attributes, and missing attribute access. |
+| 22 | **Anti-patterns** | Explicit prohibition table covering IDs, logic placement, controller shape, response types, DI, pagination, rate limiting, error format, and type safety. |
 
 ## Structure
 

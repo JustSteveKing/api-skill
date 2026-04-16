@@ -151,6 +151,43 @@ Route::prefix('v1/posts')->middleware(['auth:sanctum', 'throttle:api'])->group(f
 
 ---
 
+## Model — ULID Primary Keys
+
+All API-facing models use `HasUlids`. The migration column must be `ulid`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Model;
+
+final class Post extends Model
+{
+    use HasUlids;
+
+    protected function casts(): array
+    {
+        return [
+            'published_at' => 'datetime',
+        ];
+    }
+}
+```
+
+Migration:
+
+```php
+$table->ulid('id')->primary();
+```
+
+Never use `$table->id()` (auto-increment) on a model that is exposed through an API endpoint.
+
+---
+
 ## Complete Worked Example — Storing a Post
 
 ### Payload
@@ -581,12 +618,15 @@ Both the rate limiter and the resource wrapping setting belong in `AppServicePro
 
 ```php
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\RateLimiter;
 
 public function boot(): void
 {
+    Model::shouldBeStrict();
+
     JsonResource::withoutWrapping();
 
     RateLimiter::for('api', function (Request $request): Limit {
@@ -730,6 +770,27 @@ CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 ```
 
 `HandleCors` is part of Laravel's global middleware stack — no per-route changes are needed.
+
+---
+
+## Anti-patterns
+
+Quick reference for what to avoid and why:
+
+| Anti-pattern | Correct approach |
+|---|---|
+| `$table->id()` on API models | `$table->ulid('id')->primary()` + `HasUlids` trait |
+| Business logic in models | Move to an Action class under `app/Actions/` |
+| Resourceful or multi-method controllers | One `final` invokable controller per operation |
+| Returning `$model->toArray()` or raw `array` from a controller | Return an API Resource |
+| `app(Foo::class)` or `resolve(Foo::class)` inside a method | Declare `private readonly Foo $foo` in the constructor |
+| `DB::transaction()` Facade in an Action | Inject `DatabaseManager` and call `$this->database->transaction()` |
+| `paginate()` on any list endpoint | `simplePaginate()` — no `COUNT(*)` |
+| A route group without `throttle:api` | Always include `throttle:api`, including on auth routes |
+| Any exception producing an HTML response | `ForceJsonResponse` middleware + full exception handler |
+| A PHP file without `declare(strict_types=1)` | First statement after `<?php`, always |
+| `if/elseif` chains selecting a single value | `match` expression |
+| Policy or gate checks inside an Action | Authorize in `FormRequest::authorize()` only |
 
 ---
 

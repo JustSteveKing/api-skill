@@ -664,6 +664,118 @@ In production, replace `allowed_origins: ['*']` with an explicit list of trusted
 
 ---
 
+## 19. Code Quality Standards
+
+Every PHP file in the project must meet these standards without exception:
+
+- **`declare(strict_types=1)`** on every file, always the first statement after the opening tag
+- **`final`** on every class — controllers, actions, payloads, jobs, middleware, resources — unless explicitly designed for extension
+- **`match`** over `if/elseif` chains and nested ternaries wherever a value is being selected
+- **Named arguments** on constructor calls and method calls with multiple parameters — this is already demonstrated throughout the examples and is required, not optional
+- **Full type coverage** — typed properties, typed parameters, typed return types on every method
+- **PSR-12** naming and formatting conventions throughout
+
+```php
+<?php // ✓
+
+declare(strict_types=1); // ✓ always first
+
+namespace App\Actions\Posts;
+
+final class StorePostAction // ✓ final
+{
+    public function handle(StorePayload $payload): Post // ✓ fully typed
+    {
+        return $this->database->transaction(
+            callback: fn (): Post => Post::query()->create( // ✓ named argument
+                attributes: $payload->toArray(),
+            ),
+        );
+    }
+}
+```
+
+---
+
+## 20. Model Identifiers — ULIDs
+
+Never use auto-increment integer IDs on API-facing models. Integer IDs expose record counts, enable enumeration attacks, and create ordering assumptions consumers should not rely on.
+
+Always use Laravel's `HasUlids` trait:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Model;
+
+final class Post extends Model
+{
+    use HasUlids;
+}
+```
+
+Laravel handles ULID generation automatically. No migration changes beyond defining the primary key column as `string` (26 characters) are required:
+
+```php
+$table->ulid('id')->primary();
+```
+
+---
+
+## 21. Model Strictness
+
+Call `Model::shouldBeStrict()` in `AppServiceProvider::boot()`. This enables three protections simultaneously:
+
+- **Prevents lazy loading** — any unloaded relationship accessed outside of `with()` throws immediately, surfacing N+1 queries during development
+- **Prevents silently discarded attributes** — assigning an attribute not in `$fillable` throws rather than silently ignoring it
+- **Prevents accessing missing attributes** — reading an attribute that doesn't exist on the model throws rather than returning `null`
+
+```php
+use Illuminate\Database\Eloquent\Model;
+
+public function boot(): void
+{
+    Model::shouldBeStrict();
+
+    JsonResource::withoutWrapping();
+
+    RateLimiter::for('api', function (Request $request): Limit {
+        return Limit::perMinute(60)->by(
+            key: $request->user()?->id ?: $request->ip(),
+        );
+    });
+}
+```
+
+These are development-time errors by design. Fix the underlying issue — don't suppress the exception.
+
+---
+
+## 22. Anti-patterns
+
+The following are explicitly prohibited. If you find yourself reaching for any of these, stop and apply the correct pattern instead.
+
+| Anti-pattern | Why | What to do instead |
+|---|---|---|
+| Auto-increment integer primary keys | Exposes record counts, enables enumeration | Use `HasUlids` (section 20) |
+| Business logic in models (scopes excluded) | Violates single responsibility, untestable in isolation | Use Actions (section 9) |
+| Multi-method or resourceful controllers | Obscures intent, harder to locate logic | Single-action invokable controllers (section 2) |
+| Returning raw models or arrays from controllers | Leaks schema, no transformation layer | Always use API Resources (section 4) |
+| `app()`, `resolve()`, or Facades in controllers/actions | Hides dependencies, harder to test | Constructor injection (section 11) |
+| `DB::transaction()` Facade | Same as above — hides the dependency | Inject `DatabaseManager` (section 9) |
+| `paginate()` on list endpoints | Runs an expensive `COUNT(*)` | Always `simplePaginate()` (section 12) |
+| Unthrottled routes | Exposes all endpoints to brute force and abuse | Always `throttle:api` (section 13) |
+| HTML error responses on API routes | Breaks every API client | `ForceJsonResponse` + full exception handler (sections 6, 17) |
+| Skipping `declare(strict_types=1)` | Silent type coercion bugs | Required on every file (section 19) |
+| Authorization checks in Actions | Actions receive already-authorized data | Authorize in Form Request `authorize()` (section 8) |
+
+---
+
 ## References
 
 For detailed folder structure and naming conventions, see [references/CONVENTIONS.md](references/CONVENTIONS.md).
