@@ -253,7 +253,18 @@ All error responses follow [RFC 9457 Problem Details](https://www.rfc-editor.org
 }
 ```
 
-The exception handler in `bootstrap/app.php` is responsible for rendering **all** exceptions as Problem Details JSON. No exception should ever produce an HTML response on an API route. At minimum, the following must be handled explicitly:
+RFC 9457 also requires responses to be served with `Content-Type: application/problem+json`, not `application/json`. Enforce both the shape and the header through a single `ProblemResponse` class that implements Laravel's `Responsable` interface, living at `app/Http/Responses/ProblemResponse.php`. Every exception handler closure returns a `ProblemResponse` — no raw arrays, no ad-hoc `JsonResponse` construction:
+
+```php
+return new ProblemResponse(
+    type:   'https://example.com/problems/not-found',
+    title:  'Not Found',
+    status: Response::HTTP_NOT_FOUND,
+    detail: 'The requested resource could not be found.',
+);
+```
+
+The exception handler in `bootstrap/app.php` is responsible for rendering **all** exceptions. No exception should ever produce an HTML response on an API route. At minimum, the following must be handled explicitly:
 
 | Exception | Status | Problem type slug |
 |---|---|---|
@@ -263,7 +274,7 @@ The exception handler in `bootstrap/app.php` is responsible for rendering **all*
 | `ModelNotFoundException` | `404` | `not-found` |
 | `Throwable` (catch-all) | `500` | `server-error` |
 
-The catch-all ensures nothing falls through to Laravel's default HTML error page. See [references/CONVENTIONS.md](references/CONVENTIONS.md) for the full handler implementation.
+The catch-all ensures nothing falls through to Laravel's default HTML error page. See [references/CONVENTIONS.md](references/CONVENTIONS.md) for the full `ProblemResponse` implementation and handler.
 
 ---
 

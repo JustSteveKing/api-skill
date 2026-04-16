@@ -48,6 +48,8 @@ app/
     Resources/
       PostResource.php
       UserResource.php
+    Responses/
+      ProblemResponse.php
   Jobs/
     Posts/
       StorePostJob.php
@@ -533,78 +535,107 @@ final class RegisterController
 
 ---
 
-## RFC 9457 Problem Details — Exception Handler
+## ProblemResponse
 
-Register this in `bootstrap/app.php`. Every exception type that can occur on an API route must be mapped to a Problem Details response. The catch-all `Throwable` handler ensures nothing falls through to an HTML error page:
+`app/Http/Responses/ProblemResponse.php` — implements `Responsable` so it can be returned directly from any exception handler closure. Sets `Content-Type: application/problem+json` as required by RFC 9457, and uses `array_filter` to omit the `errors` key when not present:
 
 ```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Responses;
+
+use Illuminate\Contracts\Support\Responsable;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+final class ProblemResponse implements Responsable
+{
+    public function __construct(
+        private readonly string $type,
+        private readonly string $title,
+        private readonly int    $status,
+        private readonly string $detail,
+        private readonly array  $errors = [],
+    ) {}
+
+    public function toResponse($request): JsonResponse
+    {
+        return new JsonResponse(
+            data: array_filter([
+                'type'   => $this->type,
+                'title'  => $this->title,
+                'status' => $this->status,
+                'detail' => $this->detail,
+                'errors' => $this->errors ?: null,
+            ]),
+            status:  $this->status,
+            headers: ['Content-Type' => 'application/problem+json'],
+        );
+    }
+}
+```
+
+---
+
+## RFC 9457 Problem Details — Exception Handler
+
+Register this in `bootstrap/app.php`. Every exception handler closure returns a `ProblemResponse` — no raw arrays, no ad-hoc `JsonResponse` construction:
+
+```php
+use App\Http\Responses\ProblemResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 ->withExceptions(function (Exceptions $exceptions): void {
-    $exceptions->render(function (ValidationException $e, Request $request): JsonResponse {
-        return new JsonResponse(
-            data: [
-                'type'   => 'https://example.com/problems/validation-error',
-                'title'  => 'Validation Error',
-                'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                'detail' => 'The given data was invalid.',
-                'errors' => $e->errors(),
-            ],
+    $exceptions->render(function (ValidationException $e, Request $request): ProblemResponse {
+        return new ProblemResponse(
+            type:   'https://example.com/problems/validation-error',
+            title:  'Validation Error',
             status: Response::HTTP_UNPROCESSABLE_ENTITY,
+            detail: 'The given data was invalid.',
+            errors: $e->errors(),
         );
     });
 
-    $exceptions->render(function (AuthenticationException $e, Request $request): JsonResponse {
-        return new JsonResponse(
-            data: [
-                'type'   => 'https://example.com/problems/unauthenticated',
-                'title'  => 'Unauthenticated',
-                'status' => Response::HTTP_UNAUTHORIZED,
-                'detail' => 'You are not authenticated.',
-            ],
+    $exceptions->render(function (AuthenticationException $e, Request $request): ProblemResponse {
+        return new ProblemResponse(
+            type:   'https://example.com/problems/unauthenticated',
+            title:  'Unauthenticated',
             status: Response::HTTP_UNAUTHORIZED,
+            detail: 'You are not authenticated.',
         );
     });
 
-    $exceptions->render(function (AuthorizationException $e, Request $request): JsonResponse {
-        return new JsonResponse(
-            data: [
-                'type'   => 'https://example.com/problems/forbidden',
-                'title'  => 'Forbidden',
-                'status' => Response::HTTP_FORBIDDEN,
-                'detail' => 'You are not authorised to perform this action.',
-            ],
+    $exceptions->render(function (AuthorizationException $e, Request $request): ProblemResponse {
+        return new ProblemResponse(
+            type:   'https://example.com/problems/forbidden',
+            title:  'Forbidden',
             status: Response::HTTP_FORBIDDEN,
+            detail: 'You are not authorised to perform this action.',
         );
     });
 
-    $exceptions->render(function (ModelNotFoundException $e, Request $request): JsonResponse {
-        return new JsonResponse(
-            data: [
-                'type'   => 'https://example.com/problems/not-found',
-                'title'  => 'Not Found',
-                'status' => Response::HTTP_NOT_FOUND,
-                'detail' => 'The requested resource could not be found.',
-            ],
+    $exceptions->render(function (ModelNotFoundException $e, Request $request): ProblemResponse {
+        return new ProblemResponse(
+            type:   'https://example.com/problems/not-found',
+            title:  'Not Found',
             status: Response::HTTP_NOT_FOUND,
+            detail: 'The requested resource could not be found.',
         );
     });
 
-    $exceptions->render(function (\Throwable $e, Request $request): JsonResponse {
-        return new JsonResponse(
-            data: [
-                'type'   => 'https://example.com/problems/server-error',
-                'title'  => 'Server Error',
-                'status' => Response::HTTP_INTERNAL_SERVER_ERROR,
-                'detail' => 'An unexpected error occurred.',
-            ],
+    $exceptions->render(function (\Throwable $e, Request $request): ProblemResponse {
+        return new ProblemResponse(
+            type:   'https://example.com/problems/server-error',
+            title:  'Server Error',
             status: Response::HTTP_INTERNAL_SERVER_ERROR,
+            detail: 'An unexpected error occurred.',
         );
     });
 })

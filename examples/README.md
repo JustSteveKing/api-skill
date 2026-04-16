@@ -1,6 +1,15 @@
 # Examples
 
-Complete, layered examples for two resources. Every file uses the namespaces it would have in a real Laravel application — copy any file directly into the matching path in your project.
+Complete, layered examples. Every file uses the namespace it would have in a real Laravel application — copy any file directly into the matching path in your project.
+
+## Responses — shared infrastructure
+
+```
+responses/
+└── ProblemResponse.php     app/Http/Responses/ProblemResponse.php
+```
+
+Implements `Responsable`. Returns `Content-Type: application/problem+json` as required by RFC 9457. Used by every exception handler closure — see `references/CONVENTIONS.md` for the full handler.
 
 ## Posts — full CRUD
 
