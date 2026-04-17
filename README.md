@@ -28,7 +28,7 @@ Claude Code discovers skills automatically on startup. No further configuration 
 
 ## What's covered
 
-This skill is prescriptive across 18 topics. When Claude generates or reviews Laravel API code with this skill active, it follows these rules without deviation:
+This skill is prescriptive across 22 topics. When Claude generates or reviews Laravel API code with this skill active, it follows these rules without deviation:
 
 | # | Topic | Rule summary |
 |---|---|---|
